@@ -358,7 +358,7 @@ def download(base_model):
     repo = model["repo"]
 
     # download unet
-    if base_model == "flux-dev" or base_model == "flux-schnell":
+    if base_model in ["flux-dev", "flux-schnell", "bdsqlsz/flux1-dev2pro-single"]:
         unet_folder = "models/unet"
     else:
         unet_folder = f"models/unet/{repo}"
