@@ -358,16 +358,18 @@ def download(base_model):
     repo = model["repo"]
 
     # download unet
-    if base_model in ["flux-dev", "flux-schnell"]:
-        unet_folder = "models/unet"
-    else:
-        unet_folder = f"models/unet/{repo}"
+    unet_folder = "models/unet"
     unet_path = os.path.join(unet_folder, model_file)
     if not os.path.exists(unet_path):
-        os.makedirs(unet_folder, exist_ok=True)
-        gr.Info(f"Downloading base model: {base_model}. Please wait. (You can check the terminal for the download progress)", duration=None)
-        print(f"download {base_model}")
-        hf_hub_download(repo_id=repo, local_dir=unet_folder, filename=model_file)
+        unet_folder = f"models/unet/{repo}"
+        if os.path.splitext(model_file)[-1] == ".sft":
+            model_file = os.path.splitext(model_file)[0] + ".safetensors"
+        unet_path = os.path.join(unet_folder, model_file)
+        if not os.path.exists(unet_path):
+            os.makedirs(unet_folder, exist_ok=True)
+            gr.Info(f"Downloading base model: {base_model}. Please wait. (You can check the terminal for the download progress)", duration=None)
+            print(f"download {base_model}")
+            hf_hub_download(repo_id=repo, local_dir=unet_folder, filename=model_file)
 
     # download vae
     vae_folder = "models/vae"
@@ -470,11 +472,13 @@ def gen_sh(
     model_config = models[base_model]
     model_file = model_config["file"]
     repo = model_config["repo"]
-    if base_model in ["flux-dev", "flux-schnell"]:
-        model_folder = "models/unet"
-    else:
-        model_folder = f"models/unet/{repo}"
+    model_folder = "models/unet"
     model_path = os.path.join(model_folder, model_file)
+    if not os.path.exists(model_path):
+        model_folder = f"models/unet/{repo}"
+        if os.path.splitext(model_file)[-1] == ".sft":
+            model_file = os.path.splitext(model_file)[0] + ".safetensors"
+        model_path = os.path.join(model_folder, model_file)
     pretrained_model_path = resolve_path(model_path)
 
     clip_path = resolve_path("models/clip/clip_l.safetensors")
