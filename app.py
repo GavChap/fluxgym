@@ -6,7 +6,9 @@ sys.path.insert(0, os.getcwd())
 sys.path.append(os.path.join(os.path.dirname(__file__), 'sd-scripts'))
 import subprocess
 import gradio as gr
-from PIL import Image
+from PIL import Image, ImageOps
+import pillow_avif
+import imageio.v3 as iio
 import torch
 import uuid
 import shutil
@@ -23,7 +25,7 @@ import toml
 import re
 MAX_IMAGES = 150
 
-with open('models.yaml', 'r') as file:
+with open('models.yaml', 'r', encoding='utf-8') as file:
     models = yaml.safe_load(file)
 
 def readme(base_model, lora_name, instance_prompt, sample_prompts):
@@ -200,7 +202,7 @@ def load_captioning(uploaded_files, concept_sentence):
         if(image_value):
             base_name = os.path.splitext(os.path.basename(image_value))[0]
             if base_name in txt_files_dict:
-                with open(txt_files_dict[base_name], 'r') as file:
+                with open(txt_files_dict[base_name], 'r', encoding='utf-8') as file:
                     corresponding_caption = file.read()
 
         # Update value of captioning area
@@ -216,8 +218,36 @@ def load_captioning(uploaded_files, concept_sentence):
 def hide_captioning():
     return gr.update(visible=False), gr.update(visible=False)
 
+def load_image(img_path: str, force_rgb: bool = False):
+    img_array = iio.imread(img_path)
+    if img_array.ndim == 2:
+        image = Image.fromarray(img_array, mode='L')
+    elif img_array.ndim == 3 or img_array.ndim == 4:
+        if img_array.ndim == 4:
+            # When the image has a frame dimension, only the first frame is taken.
+            img_array = img_array[0]
+        height, width, channels = img_array.shape
+        if channels == 3:  # RGB
+            image = Image.fromarray(img_array, mode='RGB')
+        elif channels == 4:  # RGBA
+            image = Image.fromarray(img_array, mode='RGBA')
+        else:
+            raise ValueError(f"Unsupported number of channels: {channels}")
+    else:
+        raise ValueError(f"Unsupported image shape: {img_array.shape}")
+
+    if force_rgb and image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    try:
+        # transpose with exif data
+        image = ImageOps.exif_transpose(image)
+    except Exception as e:
+        print(f"Error rotating {img_path}: {e}")
+    return image
+
 def resize_image(image_path, output_path, size):
-    with Image.open(image_path) as img:
+    with load_image(image_path) as img:
         width, height = img.size
         if width < height:
             new_width = size
@@ -260,7 +290,7 @@ def create_dataset(destination_folder, size, *inputs):
             print(f"{caption_path} already exists. use the existing .txt file")
         else:
             print(f"{caption_path} create a .txt caption file")
-            with open(caption_path, 'w') as file:
+            with open(caption_path, 'w', encoding='utf-8') as file:
                 file.write(original_caption)
 
     print(f"destination_folder {destination_folder}")
@@ -284,7 +314,7 @@ def run_captioning(images, concept_sentence, *captions):
     for i, image_path in enumerate(images):
         print(captions[i])
         if isinstance(image_path, str):  # If image is a file path
-            image = Image.open(image_path).convert("RGB")
+            image = load_image(image_path, force_rgb=True)
 
         prompt = "<DETAILED_CAPTION>"
         inputs = processor(text=prompt, images=image, return_tensors="pt").to(device, torch_dtype)
@@ -440,7 +470,7 @@ def gen_sh(
     model_config = models[base_model]
     model_file = model_config["file"]
     repo = model_config["repo"]
-    if base_model == "flux-dev" or base_model == "flux-schnell":
+    if base_model in ["flux-dev", "flux-schnell", "bdsqlsz/flux1-dev2pro-single"]:
         model_folder = "models/unet"
     else:
         model_folder = f"models/unet/{repo}"
