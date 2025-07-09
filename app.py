@@ -23,7 +23,7 @@ from argparse import Namespace
 import train_network
 import toml
 import re
-MAX_IMAGES = 150
+MAX_IMAGES = 3000
 
 with open('models.yaml', 'r', encoding='utf-8') as file:
     models = yaml.safe_load(file)
